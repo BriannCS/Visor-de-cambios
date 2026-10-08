@@ -1,0 +1,23 @@
+{
+  "name": "visor-de-cambios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Visor de Cambios Venezuela — PWA + APK (Capacitor)",
+  "scripts": {
+    "iconos": "capacitor-assets generate --iconBackgroundColor \"#0a0a0c\" --iconBackgroundColorDark \"#0a0a0c\" --splashBackgroundColor \"#0a0a0c\" --splashBackgroundColorDark \"#0a0a0c\"",
+    "sync": "cap sync"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/clipboard": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/filesystem": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/share": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.0.0"
+  }
+}

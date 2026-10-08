@@ -1,0 +1,16 @@
+{
+  "appId": "com.autanasin.visorcambios",
+  "appName": "Visor de Cambios",
+  "webDir": "www",
+  "backgroundColor": "#0a0a0c",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "auto"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0a0a0c",
+      "overlaysWebView": false
+    }
+  }
+}

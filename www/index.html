@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Visor de Cambios</title>
+<!-- App (PWA / APK): estas 9 líneas no van en la versión de Apps Script -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Visor">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<script src="config.js"></script>
+<script src="puente.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: #0a0a0c;
+  --card: #131418;
+  --card-soft: #0f1014;
+  --border: rgba(255,255,255,.06);
+  --text: #f0f1f3;
+  --text-mute: #8a8d96;
+  --text-faint: #555861;
+  --accent: #00d4ff;
+  --accent-soft: rgba(0,212,255,.08);
+  --accent-line: rgba(0,212,255,.22);
+  --green: #36d399;
+  --green-soft: rgba(54,211,153,.10);
+  --red: #ff5c5c;
+  --red-soft: rgba(255,92,92,.08);
+  --warn: #ffd166;
+  --purple: #b39dff;
+  --input-bg: #0c0d10;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; overscroll-behavior: none; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  padding: calc(var(--safe-top) + 16px) 14px calc(var(--safe-bot) + 24px) 14px;
+  min-height: 100vh;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+button, input { font-family: inherit; }
+button { cursor: pointer; touch-action: manipulation; border: none; background: none; color: inherit; }
+input { touch-action: manipulation; }
+
+.container { max-width: 440px; margin: 0 auto; }
+
+/* ============ HEADER ============ */
+.header { padding: 4px 4px 18px; display: flex; align-items: flex-start; justify-content: space-between; }
+.brand { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.brand-sub { font-size: 0.62rem; font-weight: 500; color: var(--text-faint); letter-spacing: 3px; text-transform: uppercase; margin-top: 5px; }
+.sync {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.6rem; color: var(--green); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 1.5px;
+  opacity: 0; transition: opacity .3s; padding-top: 4px;
+}
+.sync.on { opacity: 1; }
+.dot { width: 5px; height: 5px; background: var(--green); border-radius: 50%; animation: blink 1.5s infinite; }
+@keyframes blink { 0%,100% { opacity:.25 } 50% { opacity:1 } }
+
+/* ============ DATE BAR ============ */
+.date-bar {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 13px 16px; margin-bottom: 12px;
+}
+.date-text { flex: 1; font-size: 0.82rem; color: var(--text); font-weight: 500; }
+.date-input { background: transparent; border: none; color: var(--text-mute); font-size: 16px; font-weight: 500; width: 140px; padding: 0; }
+.date-input::-webkit-calendar-picker-indicator { filter: invert(0.55); cursor: pointer; opacity: 0.8; }
+
+/* ============ MAIN CARD ============ */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 20px; }
+
+.mode-row { display: flex; gap: 4px; background: var(--input-bg); border-radius: 11px; padding: 4px; margin-bottom: 14px; }
+.mode-btn { flex: 1; color: var(--text-mute); padding: 10px; border-radius: 8px; font-weight: 600; font-size: 0.78rem; letter-spacing: 0.04em; transition: all .2s; }
+.mode-btn.on { background: var(--accent); color: var(--bg); }
+
+/* Paralelo */
+.par-row { display: flex; gap: 10px; margin-bottom: 14px; }
+.par-toggle {
+  flex: 1.3; background: var(--input-bg); border: 1px solid var(--border); color: var(--text-mute);
+  height: 50px; border-radius: 12px; font-weight: 600; font-size: 0.78rem; letter-spacing: 0.04em; transition: all .2s;
+}
+.par-toggle:active { transform: scale(.98); }
+.par-toggle.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.par-wrap { flex: 0.7; position: relative; display: none; }
+.par-wrap.show { display: block; }
+.par-input {
+  width: 100%; background: var(--input-bg); border: 1px solid var(--accent-line); color: var(--text);
+  border-radius: 12px; height: 50px; text-align: right; padding: 0 38px 0 12px;
+  font-weight: 600; font-size: 16px;
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+}
+.par-input:focus { outline: none; border-color: var(--accent); }
+.par-reset {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  background: var(--accent-soft); border: 1px solid var(--accent-line); color: var(--accent);
+  width: 30px; height: 30px; border-radius: 7px; font-size: 0.9rem; font-weight: 700;
+  display: none; align-items: center; justify-content: center; line-height: 1;
+}
+.par-reset.show { display: flex; }
+
+/* Monto */
+.monto-wrap { position: relative; margin-bottom: 14px; }
+.monto-input {
+  width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 14px; padding: 0 56px 0 18px;
+  font-size: 1.85rem; font-weight: 700; text-align: right; height: 66px;
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.monto-input:focus { outline: none; border-color: var(--accent); }
+.monto-symbol { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); color: var(--accent); font-weight: 700; font-size: 1.15rem; pointer-events: none; }
+
+/* ============ COPIAR ============ */
+.copyable {
+  cursor: pointer;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  transition: background-color .25s, transform .1s;
+}
+.copyable:active { transform: scale(.985); }
+.copyable.vacio { cursor: default; }
+.copyable.vacio:active { transform: none; }
+
+.copy-ico { width: 17px; height: 17px; flex: none; color: var(--text-faint); transition: color .2s, opacity .2s; }
+.copy-ico svg { width: 100%; height: 100%; display: block; }
+.copy-ico .i-ok { display: none; }
+.copyable.vacio .copy-ico { opacity: 0; }
+.copyable.copied .copy-ico { color: var(--green); }
+.copyable.copied .copy-ico .i-copy { display: none; }
+.copyable.copied .copy-ico .i-ok { display: block; }
+.copyable.flash { background-color: var(--green-soft); }
+
+/* Resultado principal */
+.result {
+  position: relative; text-align: center;
+  background: var(--accent-soft); border: 1px solid var(--accent-line);
+  border-radius: 14px; padding: 18px 46px; margin-bottom: 18px;
+}
+.result.flash { background-color: var(--green-soft); border-color: rgba(54,211,153,.35); }
+.result .copy-ico { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: var(--accent); opacity: .75; }
+.result.vacio .copy-ico { opacity: 0; }
+.result-label { font-size: 0.62rem; color: var(--text-mute); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
+.result-value {
+  font-size: 34px; font-weight: 700; margin-top: 8px; line-height: 1.05;
+  letter-spacing: -0.02em; white-space: nowrap; overflow: hidden;
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+}
+
+/* Tasas */
+.rates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rate { background: var(--card-soft); border: 1px solid var(--border); border-radius: 14px; padding: 14px; min-width: 0; }
+.rate-label { font-size: 0.6rem; color: var(--text-mute); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+
+.rate-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  margin: 2px -6px 0; padding: 4px 6px; border-radius: 8px;
+}
+.rate-value {
+  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden;
+  font-size: 1.35rem; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em;
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+}
+.rate-delta {
+  font-size: 0.7rem; font-weight: 600; margin-top: 3px; color: var(--text-faint); display: none;
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+}
+.rate-delta.show { display: block; }
+.rate-delta.up { color: var(--green); }
+.rate-delta.down { color: var(--red); }
+.rate-delta.same { color: var(--text-mute); }
+
+.rate-divider { height: 1px; background: var(--border); margin: 11px -14px 6px; display: none; }
+.eq-row {
+  display: none; align-items: center; gap: 6px;
+  margin: 0 -6px; padding: 5px 6px 5px 29px; border-radius: 8px;
+}
+.rate-eq {
+  flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden;
+  font-size: 1.05rem; font-weight: 700;
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+}
+.rate-diff {
+  font-size: 0.68rem; font-weight: 600; text-align: center; margin-top: 2px; color: var(--text-faint); display: none;
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+}
+.rates.with-amount .rate-divider,
+.rates.with-amount .rate-diff { display: block; }
+.rates.with-amount .eq-row { display: flex; }
+
+/* Indicador: dólares de Binance a vender para cubrir el monto BCV */
+.sell-row {
+  display: none; position: relative;
+  margin: 10px 0 0; padding: 8px 26px 8px 8px;
+  border-radius: 10px; text-align: center;
+  background: rgba(255,92,92,.06); border: 1px dashed rgba(255,92,92,.25);
+}
+.sell-row .copy-ico {
+  position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+  width: 15px; height: 15px;
+}
+.sell-txt {
+  font-size: 0.62rem; font-weight: 600; color: var(--text-mute);
+  line-height: 1.3; white-space: normal; overflow-wrap: anywhere;
+}
+.sell-txt b {
+  display: block; margin-top: 2px;
+  font-size: 0.95rem; font-weight: 700; color: var(--red);
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+}
+.rates.with-amount.modo-usd .sell-row { display: block; }
+.rates.with-amount.modo-usd .sell-row.vacio { display: none; }
+
+.rate-bc  .rate-value { color: var(--green); }
+.rate-bv  .rate-value { color: var(--red); }
+.rate-bcv .rate-value { color: var(--warn); }
+.rate-eu  .rate-value { color: var(--purple); }
+.rate-pa  { grid-column: 1 / -1; display: none; }
+.rate-pa.show { display: block; }
+.rate-pa  .rate-value { color: var(--accent); }
+
+/* Brecha */
+.brecha { margin-top: 14px; text-align: center; background: var(--card-soft); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+.brecha-label { font-size: 0.62rem; color: var(--text-mute); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
+.brecha-pct {
+  font-size: 1.75rem; font-weight: 700; margin-top: 6px; line-height: 1; letter-spacing: -0.02em;
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+}
+.brecha-val { font-size: 0.78rem; font-weight: 500; margin-top: 5px; color: var(--text-mute); font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+/* Preferencia de copiado */
+.copy-pref { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding: 0 2px; }
+.copy-pref-label { font-size: 0.68rem; color: var(--text-mute); font-weight: 500; }
+.mini-seg { display: flex; gap: 3px; background: var(--input-bg); border-radius: 9px; padding: 3px; }
+.mini-seg button {
+  color: var(--text-mute); padding: 6px 10px; border-radius: 7px;
+  font-size: 0.72rem; font-weight: 600;
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+}
+.mini-seg button.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-line); }
+
+.foot-info { text-align: center; font-size: 0.62rem; color: var(--text-faint); margin-top: 14px; font-weight: 500; letter-spacing: 0.04em; }
+
+/* Acciones */
+.actions { display: flex; gap: 10px; margin-top: 14px; }
+.act-btn { flex: 1; padding: 14px; border-radius: 13px; font-weight: 600; font-size: 0.8rem; letter-spacing: 0.06em; transition: all 0.15s; border: 1px solid transparent; }
+.act-btn:active { transform: scale(.98); }
+.act-btn:disabled { opacity: .6; }
+.act-clear   { background: var(--card-soft); color: var(--text-mute); border-color: var(--border); }
+.act-capture { background: var(--accent); color: var(--bg); }
+
+.signature { text-align: center; margin-top: 26px; font-size: 0.6rem; color: var(--text-faint); font-weight: 400; letter-spacing: 0.1em; opacity: 0.55; }
+.signature em { font-style: normal; color: var(--text-mute); font-weight: 500; }
+
+/* Modo captura: ocultar controles que no aportan a la imagen */
+.capturing .actions,
+.capturing .copy-pref { display: none !important; }
+.capturing .copy-ico { visibility: hidden; }
+.capturing .flash { background-color: transparent !important; }
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--safe-bot) + 22px);
+  transform: translate(-50%, 16px);
+  background: #1b1d23; border: 1px solid rgba(255,255,255,.08); color: var(--text);
+  padding: 11px 16px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;
+  display: flex; align-items: center; gap: 8px; white-space: nowrap;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 70;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast b { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; color: var(--green); font-weight: 700; }
+.toast.err b { color: var(--warn); }
+
+/* Vista previa de captura */
+.shot {
+  position: fixed; inset: 0; z-index: 60; display: none;
+  align-items: center; justify-content: center;
+  background: rgba(0,0,0,.88);
+  padding: calc(var(--safe-top) + 20px) 18px calc(var(--safe-bot) + 20px);
+}
+.shot.show { display: flex; }
+.shot-box { width: 100%; max-width: 400px; }
+.shot img { width: 100%; max-height: 68vh; object-fit: contain; display: block; border-radius: 14px; border: 1px solid var(--border); }
+.shot-hint { text-align: center; font-size: 0.7rem; color: var(--text-mute); margin-top: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="container" id="captureContainer">
+
+  <div class="header">
+    <div>
+      <div class="brand">Visor de Cambios</div>
+      <div class="brand-sub">Venezuela</div>
+    </div>
+    <div class="sync" id="sync"><span class="dot"></span>Sincronizando</div>
+  </div>
+
+  <div class="date-bar">
+    <div class="date-text" id="dateText">—</div>
+    <input type="date" id="fecha" class="date-input" onchange="cambiarFecha()">
+  </div>
+
+  <div class="card">
+    <div class="mode-row">
+      <button class="mode-btn on" id="btnBS"  onclick="setMode('BS')">Bolívares</button>
+      <button class="mode-btn"    id="btnUSD" onclick="setMode('USD')">Dólares</button>
+    </div>
+
+    <div class="par-row">
+      <button class="par-toggle" id="btnPar" onclick="toggleParalelo()">$ Paralelo</button>
+      <div class="par-wrap" id="parWrap">
+        <input type="tel" inputmode="decimal" id="parInput" class="par-input" placeholder="0,00" oninput="formatParInput(this)">
+        <button class="par-reset" id="parReset" onclick="resetParalelo()" title="Restaurar valor automático">↻</button>
+      </div>
+    </div>
+
+    <div class="monto-wrap">
+      <input type="tel" inputmode="decimal" enterkeyhint="done" id="monto" class="monto-input" placeholder="0,00" oninput="formatMonto(this)">
+      <span class="monto-symbol" id="moneda">Bs</span>
+    </div>
+
+    <div class="result copyable vacio" id="cRes">
+      <div class="result-label" id="lblRes">Equivale a · Binance compra</div>
+      <div class="result-value" id="txtRes">0,00 $</div>
+      <span class="copy-ico"></span>
+    </div>
+
+    <div class="rates" id="ratesGrid">
+      <div class="rate rate-bc">
+        <div class="rate-label">Binance Compra</div>
+        <div class="rate-row copyable vacio" id="cBC"><div class="rate-value" id="vBC">—</div><span class="copy-ico"></span></div>
+        <div class="rate-delta" id="dayBC"></div>
+        <div class="rate-divider"></div>
+        <div class="eq-row copyable vacio" id="qBC"><div class="rate-eq" id="eBC">—</div><span class="copy-ico"></span></div>
+        <div class="rate-diff" id="diffBC"></div>
+      </div>
+      <div class="rate rate-bv">
+        <div class="rate-label">Binance Venta</div>
+        <div class="rate-row copyable vacio" id="cBV"><div class="rate-value" id="vBV">—</div><span class="copy-ico"></span></div>
+        <div class="rate-delta" id="dayBV"></div>
+        <div class="rate-divider"></div>
+        <div class="eq-row copyable vacio" id="qBV"><div class="rate-eq" id="eBV">—</div><span class="copy-ico"></span></div>
+        <div class="rate-diff" id="diffBV"></div>
+      </div>
+      <div class="rate rate-bcv">
+        <div class="rate-label">Tasa BCV</div>
+        <div class="rate-row copyable vacio" id="cBCV"><div class="rate-value" id="vBCV">—</div><span class="copy-ico"></span></div>
+        <div class="rate-delta" id="dayBCV"></div>
+        <div class="rate-divider"></div>
+        <div class="eq-row copyable vacio" id="qBCV"><div class="rate-eq" id="eBCV">—</div><span class="copy-ico"></span></div>
+        <div class="rate-diff" id="diffBCV"></div>
+        <div class="sell-row copyable vacio" id="cVender" title="Dólares de Binance a vender para cubrir el monto BCV">
+          <div class="sell-txt" id="txtVender">Vender aprox. <b>—</b> Binance</div><span class="copy-ico"></span>
+        </div>
+      </div>
+      <div class="rate rate-eu">
+        <div class="rate-label">Tasa Euro</div>
+        <div class="rate-row copyable vacio" id="cE"><div class="rate-value" id="vE">—</div><span class="copy-ico"></span></div>
+        <div class="rate-delta" id="dayE"></div>
+        <div class="rate-divider"></div>
+        <div class="eq-row copyable vacio" id="qE"><div class="rate-eq" id="eE">—</div><span class="copy-ico"></span></div>
+        <div class="rate-diff" id="diffE"></div>
+      </div>
+      <div class="rate rate-pa" id="cardPar">
+        <div class="rate-label">Dólar Paralelo</div>
+        <div class="rate-row copyable vacio" id="cP"><div class="rate-value" id="vP">—</div><span class="copy-ico"></span></div>
+        <div class="rate-delta" id="dayP"></div>
+        <div class="rate-divider"></div>
+        <div class="eq-row copyable vacio" id="qP"><div class="rate-eq" id="eP">—</div><span class="copy-ico"></span></div>
+        <div class="rate-diff" id="diffP"></div>
+      </div>
+    </div>
+
+    <div class="brecha">
+      <div class="brecha-label">Brecha · Binance Compra vs BCV</div>
+      <div class="brecha-pct" id="brechaPct">—</div>
+      <div class="brecha-val" id="brechaVal">Diferencia: —</div>
+    </div>
+
+    <div class="copy-pref">
+      <span class="copy-pref-label">Al copiar, pegar como</span>
+      <div class="mini-seg">
+        <button id="sepComa"  onclick="setSep(',')">1234,56</button>
+        <button id="sepPunto" onclick="setSep('.')">1234.56</button>
+      </div>
+    </div>
+
+    <div class="foot-info" id="footer">Cargando…</div>
+  </div>
+
+  <div class="actions" id="actions">
+    <button class="act-btn act-clear"   onclick="limpiar()">Limpiar</button>
+    <button class="act-btn act-capture" id="btnCap" onclick="capturar()">Capturar</button>
+  </div>
+
+  <div class="signature">Hecho por <em>Autanasin</em></div>
+</div>
+
+<!-- Vista previa de captura -->
+<div class="shot" id="shot">
+  <div class="shot-box">
+    <img id="shotImg" alt="Captura del visor">
+    <div class="shot-hint" id="shotHint">Mantén presionada la imagen para guardarla</div>
+    <div class="actions">
+      <button class="act-btn act-clear"   onclick="cerrarShot()">Cerrar</button>
+      <button class="act-btn act-capture" id="btnShare" onclick="compartirShot()">Compartir</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+ *  CONFIGURACIÓN
+ * ============================================================ */
+const CFG = {
+  REFRESCO_MS: 300000,          // auto-refresco (solo si es hoy y la app está visible)
+  COPIA_MONTO_DEC: 2,           // decimales al copiar montos (bancos)
+  COPIA_TASA_DEC: null,         // null = igual que en pantalla (BCV/EUR 4, Binance 2)
+  H2C_URL: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+  LS_DATOS: 'visor_v3_datos',
+  LS_SEP: 'visor_v3_sep',
+  MAX_FECHAS_LOCAL: 15
+};
+
+const ES_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+const ICONO =
+  '<svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+  '<svg class="i-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M20 6 9 17l-5-5"/></svg>';
+
+/* ============================================================
+ *  ESTADO
+ * ============================================================ */
+let DATA = vacio();
+let PREVIO = null;
+let MODE = 'BS';
+let paraleloActivo = false;
+let tasaParalelo = 0;
+let tasaParaleloAPI = 0;
+let paraleloEditadoManual = false;
+let SEP = ',';
+let REQ = 0;
+let ULTIMA_CARGA = 0;
+let HOY_REF = hoyISO();
+let SHOT = { file: null, url: '' };
+let CALC = { montoBsBCV: 0, usdVenderBinance: 0 }; // resultados derivados del cálculo
+
+const $ = id => document.getElementById(id);
+
+function vacio() {
+  return {
+    found: false,
+    binance: { tasa_compra: 0, tasa_venta: 0 },
+    bcv: 0, euro: 0, paralelo: 0,
+    brecha: { valor: 0, porcentaje: 0 },
+    fuente: {}
+  };
+}
+
+function normalizar(d) {
+  const b = vacio();
+  if (!d) return b;
+  b.found = !!d.found;
+  b.binance.tasa_compra = Number(d.binance && d.binance.tasa_compra) || 0;
+  b.binance.tasa_venta  = Number(d.binance && d.binance.tasa_venta)  || 0;
+  b.bcv      = Number(d.bcv) || 0;
+  b.euro     = Number(d.euro) || 0;
+  b.paralelo = Number(d.paralelo) || 0;
+  b.brecha   = d.brecha || b.brecha;
+  b.fuente   = d.fuente || {};
+  return b;
+}
+
+/* ============================================================
+ *  FORMATO (formateadores reutilizados = más rápido)
+ * ============================================================ */
+const NF = {}, NFC = {};
+function fmt(n, dec) {
+  dec = (typeof dec === 'number') ? dec : 2;
+  const f = NF[dec] || (NF[dec] = new Intl.NumberFormat('es-VE', { minimumFractionDigits: dec, maximumFractionDigits: dec }));
+  return f.format(Number(n) || 0);
+}
+/** Texto para pegar en el banco: sin separador de miles, decimales fijos. */
+function textoCopia(n, dec) {
+  const f = NFC[dec] || (NFC[dec] = new Intl.NumberFormat('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: false }));
+  const s = f.format(n);
+  return SEP === ',' ? s.replace('.', ',') : s;
+}
+
+/** Reduce la fuente si el número no cabe en su caja. */
+function ajustar(el, max, min) {
+  el.style.fontSize = max + 'px';
+  if (!el.clientWidth) return;
+  let s = max;
+  while (el.scrollWidth > el.clientWidth && s > min) {
+    s -= 1;
+    el.style.fontSize = s + 'px';
+  }
+}
+
+/* ============================================================
+ *  FECHAS
+ * ============================================================ */
+function hoyISO() {
+  const n = new Date();
+  return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+}
+function esHoySeleccionado() { return $('fecha').value === hoyISO(); }
+function hora(ts) { return new Date(ts).toLocaleTimeString('es-VE', { hour: 'numeric', minute: '2-digit' }); }
+
+function actualizarFechaDisplay() {
+  const v = $('fecha').value;
+  if (!v) return;
+  const [y, m, d] = v.split('-').map(Number);
+  const s = new Date(y, m - 1, d).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  $('dateText').textContent = s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function cambiarFecha() {
+  const f = $('fecha');
+  if (!f.value) f.value = hoyISO();
+  actualizarFechaDisplay();
+  if (!mostrarDesdeLocal(f.value)) {
+    aplicarPaquete({ actual: vacio(), previo: null });
+    $('footer').textContent = 'Cargando…';
+  }
+  buscarDatos();
+}
+
+/* ============================================================
+ *  CACHÉ LOCAL (abre al instante con el último dato)
+ * ============================================================ */
+function leerLocal() {
+  try { return JSON.parse(localStorage.getItem(CFG.LS_DATOS) || '{}') || {}; }
+  catch (e) { return {}; }
+}
+function guardarLocal(pkg) {
+  try {
+    const m = leerLocal();
+    m[pkg.fecha] = { pkg: pkg, ts: Date.now() };
+    Object.keys(m).sort((a, b) => m[b].ts - m[a].ts)
+      .slice(CFG.MAX_FECHAS_LOCAL).forEach(k => delete m[k]);
+    localStorage.setItem(CFG.LS_DATOS, JSON.stringify(m));
+  } catch (e) {}
+}
+function mostrarDesdeLocal(fecha) {
+  const e = leerLocal()[fecha];
+  if (!e || !e.pkg) return false;
+  aplicarPaquete(e.pkg);
+  $('footer').textContent = 'Dato guardado ' + hora(e.ts) + ' · actualizando…';
+  return true;
+}
+
+/* ============================================================
+ *  SERVIDOR (1 sola llamada: día actual + día previo)
+ * ============================================================ */
+function buscarDatos() {
+  const fecha = $('fecha').value;
+  const id = ++REQ;
+  $('sync').classList.add('on');
+
+  google.script.run
+    .withSuccessHandler(pkg => {
+      if (id !== REQ) return; // respuesta vieja (cambiaron la fecha)
+      $('sync').classList.remove('on');
+      ULTIMA_CARGA = Date.now();
+
+      if (!pkg || !pkg.ok) {
+        $('footer').textContent = 'No se pudieron leer las tasas. Toca la fecha para reintentar.';
+        return;
+      }
+      aplicarPaquete(pkg);
+      if (pkg.actual && pkg.actual.found) guardarLocal(pkg);
+      $('footer').textContent = piePagina(DATA);
+    })
+    .withFailureHandler(() => {
+      if (id !== REQ) return;
+      $('sync').classList.remove('on');
+      $('footer').textContent = DATA.found ? 'Sin conexión · mostrando el último dato guardado' : 'Sin conexión';
+    })
+    .obtenerPaquete(fecha);
+}
+
+function piePagina(d) {
+  if (!d.found) return 'Sin datos para esta fecha';
+  let s = 'Actualizado · ' + hora(Date.now());
+  if (d.fuente && /^api/.test(d.fuente.bcv || '')) s += ' · BCV vía API';
+  return s;
+}
+
+function aplicarPaquete(pkg) {
+  DATA   = normalizar(pkg.actual);
+  PREVIO = pkg.previo ? normalizar(pkg.previo) : null;
+  pintarValores(DATA);
+  actualizarVariaciones();
+}
+
+/* ============================================================
+ *  PINTAR
+ * ============================================================ */
+function setCopia(el, valor, dec) {
+  const ok = valor > 0 && isFinite(valor);
+  el.dataset.v = ok ? String(valor) : '';
+  el.dataset.dec = String(dec);
+  el.classList.toggle('vacio', !ok);
+}
+
+function setTasa(rowId, valId, v, dec) {
+  $(valId).textContent = v > 0 ? fmt(v, dec) : '—';
+  setCopia($(rowId), v, CFG.COPIA_TASA_DEC == null ? dec : CFG.COPIA_TASA_DEC);
+}
+
+function pintarValores(res) {
+  setTasa('cBC',  'vBC',  res.binance.tasa_compra, 2);
+  setTasa('cBV',  'vBV',  res.binance.tasa_venta,  2);
+  setTasa('cBCV', 'vBCV', res.bcv,  4);
+  setTasa('cE',   'vE',   res.euro, 4);
+
+  if (res.paralelo > 0) {
+    tasaParaleloAPI = res.paralelo;
+    if (!paraleloEditadoManual) {
+      tasaParalelo = res.paralelo;
+      $('parInput').value = fmt(res.paralelo);
+    }
+  }
+  setTasa('cP', 'vP', tasaParalelo, 2);
+
+  if (res.bcv > 0 && res.binance.tasa_compra > 0) {
+    const diff = res.binance.tasa_compra - res.bcv;
+    const pct  = (diff / res.bcv) * 100;
+    const sign = diff >= 0 ? '+' : '';
+    $('brechaPct').textContent = fmt(pct) + ' %';
+    $('brechaVal').textContent = 'Diferencia: ' + sign + fmt(diff) + ' Bs';
+    $('brechaPct').style.color = diff >= 0 ? 'var(--green)' : 'var(--red)';
+  } else {
+    $('brechaPct').textContent = '—';
+    $('brechaVal').textContent = 'Diferencia: —';
+    $('brechaPct').style.color = '';
+  }
+
+  calcular();
+}
+
+function actualizarVariaciones() {
+  const ids = ['dayBC', 'dayBV', 'dayBCV', 'dayE', 'dayP'];
+  if (!PREVIO) {
+    ids.forEach(id => { const el = $(id); el.className = 'rate-delta'; el.textContent = ''; });
+    return;
+  }
+  const pares = [
+    { actual: DATA.binance.tasa_compra, previo: PREVIO.binance.tasa_compra, id: 'dayBC',  dec: 2 },
+    { actual: DATA.binance.tasa_venta,  previo: PREVIO.binance.tasa_venta,  id: 'dayBV',  dec: 2 },
+    { actual: DATA.bcv,                 previo: PREVIO.bcv,                 id: 'dayBCV', dec: 4 },
+    { actual: DATA.euro,                previo: PREVIO.euro,                id: 'dayE',   dec: 4 },
+    { actual: tasaParalelo || tasaParaleloAPI, previo: PREVIO.paralelo,     id: 'dayP',   dec: 2 }
+  ];
+  pares.forEach(p => {
+    const el = $(p.id);
+    el.className = 'rate-delta';
+    if (!(p.actual > 0 && p.previo > 0)) { el.textContent = ''; return; }
+    const dif = p.actual - p.previo;
+    const pct = (dif / p.previo) * 100;
+    if (Math.abs(dif) < Math.pow(10, -p.dec)) {
+      el.classList.add('same', 'show');
+      el.textContent = '— sin cambio';
+      return;
+    }
+    const up = dif > 0;
+    const signo = up ? '+' : '−';
+    el.classList.add(up ? 'up' : 'down', 'show');
+    el.textContent = (up ? '↑ ' : '↓ ') + signo + fmt(Math.abs(dif), p.dec) + ' Bs · ' + signo + fmt(Math.abs(pct)) + '%';
+  });
+}
+
+/* ============================================================
+ *  CÁLCULO
+ * ============================================================ */
+function montoActual() { return parseFloat($('monto').dataset.numericValue) || 0; }
+
+function calcular() {
+  const monto = montoActual();
+  const esBS = MODE === 'BS';
+  const suf = esBS ? ' $' : ' Bs';
+  const tasaMain = esBS ? DATA.binance.tasa_compra : DATA.binance.tasa_venta;
+  const principal = tasaMain > 0 ? (esBS ? monto / tasaMain : monto * tasaMain) : 0;
+
+  const txt = $('txtRes');
+  txt.textContent = fmt(principal) + suf;
+  setCopia($('cRes'), monto > 0 ? principal : 0, CFG.COPIA_MONTO_DEC);
+  ajustar(txt, 34, 18);
+
+  $('ratesGrid').classList.toggle('with-amount', monto > 0);
+
+  const cards = [
+    { t: DATA.binance.tasa_compra, row: 'qBC',  eq: 'eBC',  diff: 'diffBC'  },
+    { t: DATA.binance.tasa_venta,  row: 'qBV',  eq: 'eBV',  diff: 'diffBV'  },
+    { t: DATA.bcv,                 row: 'qBCV', eq: 'eBCV', diff: 'diffBCV' },
+    { t: DATA.euro,                row: 'qE',   eq: 'eE',   diff: 'diffE'   },
+    { t: tasaParalelo,             row: 'qP',   eq: 'eP',   diff: 'diffP'   }
+  ];
+
+  cards.forEach(c => {
+    const elEq = $(c.eq), elDiff = $(c.diff), row = $(c.row);
+    if (c.t > 0 && monto > 0) {
+      const eq = esBS ? monto / c.t : monto * c.t;
+      const d  = eq - principal;
+      elEq.textContent = fmt(eq) + suf;
+      elDiff.textContent = (d >= 0 ? '+' : '') + fmt(d);
+      elDiff.style.color = d >= 0 ? 'var(--green)' : 'var(--red)';
+      setCopia(row, eq, CFG.COPIA_MONTO_DEC);
+      ajustar(elEq, 17, 11);
+    } else {
+      elEq.textContent = '—';
+      elEq.style.fontSize = '';
+      elDiff.textContent = '';
+      setCopia(row, 0, CFG.COPIA_MONTO_DEC);
+    }
+  });
+
+  calcularVentaBinance(monto, esBS);
+}
+
+/**
+ * Dólares de Binance que hay que vender para cubrir el monto en Bs a tasa BCV.
+ *   montoBsBCV   = monto ($) × tasa BCV
+ *   usdAVender   = montoBsBCV ÷ tasa Binance venta
+ * Solo aplica en modo Dólares (el monto base está en $).
+ */
+function calcularVentaBinance(monto, esBS) {
+  const grid  = $('ratesGrid');
+  const row   = $('cVender');
+  const txt   = $('txtVender');
+  const tBCV  = DATA.bcv;
+  const tVent = DATA.binance.tasa_venta;
+
+  grid.classList.toggle('modo-usd', !esBS);
+
+  const montoBsBCV = monto * tBCV;
+  const usdAVender = (!esBS && monto > 0 && tBCV > 0 && tVent > 0) ? montoBsBCV / tVent : 0;
+
+  CALC.montoBsBCV = !esBS ? montoBsBCV : 0;
+  CALC.usdVenderBinance = usdAVender;
+
+  txt.innerHTML = '';
+  txt.appendChild(document.createTextNode('Vender aprox. en Binance'));
+  const b = document.createElement('b');
+  b.textContent = usdAVender > 0 ? fmt(usdAVender) + ' $' : '—';
+  txt.appendChild(b);
+
+  setCopia(row, usdAVender, CFG.COPIA_MONTO_DEC);
+}
+
+/* ============================================================
+ *  CONTROLES
+ * ============================================================ */
+function setMode(m) {
+  MODE = m;
+  $('btnBS').classList.toggle('on',  m === 'BS');
+  $('btnUSD').classList.toggle('on', m === 'USD');
+  $('lblRes').textContent = 'Equivale a · ' + (m === 'BS' ? 'Binance compra' : 'Binance venta');
+  $('moneda').textContent = m === 'BS' ? 'Bs' : '$';
+  calcular();
+}
+
+function toggleParalelo() {
+  paraleloActivo = !paraleloActivo;
+  $('btnPar').classList.toggle('on', paraleloActivo);
+  $('parWrap').classList.toggle('show', paraleloActivo);
+  $('cardPar').classList.toggle('show', paraleloActivo);
+  if (paraleloActivo && tasaParaleloAPI > 0 && tasaParalelo === 0) {
+    tasaParalelo = tasaParaleloAPI;
+    $('parInput').value = fmt(tasaParaleloAPI);
+  }
+  setTasa('cP', 'vP', tasaParalelo, 2);
+  calcular();
+  actualizarVariaciones();
+}
+
+function formatMonto(input) {
+  const val = input.value.replace(/\D/g, '').slice(0, 15);
+  const num = val ? parseFloat(val) / 100 : 0;
+  input.dataset.numericValue = num;
+  input.value = num > 0 ? fmt(num) : '';
+  calcular();
+}
+
+function formatParInput(input) {
+  const val = input.value.replace(/\D/g, '').slice(0, 12);
+  const num = val ? parseFloat(val) / 100 : 0;
+  tasaParalelo = num;
+  paraleloEditadoManual = (num > 0 && Math.abs(num - tasaParaleloAPI) > 0.001);
+  input.value = num > 0 ? fmt(num) : '';
+  setTasa('cP', 'vP', num, 2);
+  $('parReset').classList.toggle('show', paraleloEditadoManual && tasaParaleloAPI > 0);
+  calcular();
+}
+
+function resetParalelo() {
+  if (tasaParaleloAPI > 0) {
+    tasaParalelo = tasaParaleloAPI;
+    paraleloEditadoManual = false;
+    $('parInput').value = fmt(tasaParaleloAPI);
+    setTasa('cP', 'vP', tasaParaleloAPI, 2);
+    $('parReset').classList.remove('show');
+    calcular();
+  }
+}
+
+function limpiar() {
+  const m = $('monto');
+  m.value = '';
+  m.dataset.numericValue = 0;
+  if (paraleloEditadoManual && tasaParaleloAPI > 0) resetParalelo();
+  calcular();
+}
+
+/* ============================================================
+ *  COPIAR (iOS + Android, dentro del iframe de Apps Script)
+ * ============================================================ */
+function setSep(s) {
+  SEP = s;
+  try { localStorage.setItem(CFG.LS_SEP, s); } catch (e) {}
+  $('sepComa').classList.toggle('on',  SEP === ',');
+  $('sepPunto').classList.toggle('on', SEP === '.');
+}
+
+/** execCommand primero: es síncrono (no pierde el gesto en iOS) y funciona en iframes. */
+function copiarLegacy(txt) {
+  const ta = document.createElement('textarea');
+  ta.value = txt;
+  ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;font-size:16px;';
+  document.body.appendChild(ta);
+  let ok = false;
+  try {
+    ta.select();
+    ta.setSelectionRange(0, txt.length);
+    ok = document.execCommand('copy');
+  } catch (e) { ok = false; }
+  document.body.removeChild(ta);
+  try { window.getSelection().removeAllRanges(); } catch (e) {}
+  return ok;
+}
+
+function copiarTexto(txt) {
+  if (copiarLegacy(txt)) return Promise.resolve(true);
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(txt).then(() => true, () => false);
+  }
+  return Promise.resolve(false);
+}
+
+document.addEventListener('click', ev => {
+  const c = ev.target.closest('.copyable');
+  if (!c || c.classList.contains('vacio')) return;
+  const v = parseFloat(c.dataset.v);
+  if (!(v > 0)) return;
+
+  const txt = textoCopia(v, Number(c.dataset.dec) || 2);
+  copiarTexto(txt).then(ok => {
+    if (ok) {
+      marcarCopiado(c);
+      if (navigator.vibrate) navigator.vibrate(12);
+      toast('Copiado', txt);
+    } else {
+      toast('No se pudo copiar', txt, true);
+    }
+  });
+});
+
+function marcarCopiado(el) {
+  document.querySelectorAll('.copyable.copied').forEach(x => { if (x !== el) x.classList.remove('copied', 'flash'); });
+  el.classList.add('copied', 'flash');
+  clearTimeout(el._t1); clearTimeout(el._t2);
+  el._t1 = setTimeout(() => el.classList.remove('flash'), 450);
+  el._t2 = setTimeout(() => el.classList.remove('copied'), 1400);
+}
+
+let toastT = null;
+function toast(msg, valor, err) {
+  const t = $('toast');
+  t.innerHTML = '';
+  t.appendChild(document.createTextNode(msg + (valor ? ' ' : '')));
+  if (valor) { const b = document.createElement('b'); b.textContent = valor; t.appendChild(b); }
+  t.classList.toggle('err', !!err);
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 1700);
+}
+
+/* ============================================================
+ *  CAPTURA (html2canvas bajo demanda + vista previa)
+ * ============================================================ */
+let h2cPromesa = null;
+function cargarHtml2canvas() {
+  if (window.html2canvas) return Promise.resolve();
+  if (h2cPromesa) return h2cPromesa;
+  h2cPromesa = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = CFG.H2C_URL;
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => { h2cPromesa = null; reject(new Error('No cargó html2canvas')); };
+    document.head.appendChild(s);
+  });
+  return h2cPromesa;
+}
+
+function nombreArchivo() {
+  return 'visor-' + $('fecha').value + '-' + Date.now().toString().slice(-5) + '.png';
+}
+
+async function capturar() {
+  const btn = $('btnCap');
+  const cont = $('captureContainer');
+  btn.disabled = true;
+  btn.textContent = 'Generando…';
+  try {
+    if (document.activeElement) document.activeElement.blur();
+    await cargarHtml2canvas();
+    cont.classList.add('capturing');
+    const canvas = await html2canvas(cont, { backgroundColor: '#0a0a0c', scale: 2, logging: false });
+    cont.classList.remove('capturing');
+
+    const url = canvas.toDataURL('image/png');
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    SHOT = { url: url, file: blob ? new File([blob], nombreArchivo(), { type: 'image/png' }) : null };
+    abrirShot();
+  } catch (e) {
+    toast('No se pudo generar la captura', '', true);
+  } finally {
+    cont.classList.remove('capturing');
+    btn.disabled = false;
+    btn.textContent = 'Capturar';
+  }
+}
+
+function puedeCompartir() {
+  try { return !!(SHOT.file && navigator.canShare && navigator.canShare({ files: [SHOT.file] })); }
+  catch (e) { return false; }
+}
+
+function abrirShot() {
+  $('shotImg').src = SHOT.url;
+  const share = puedeCompartir();
+  const btn = $('btnShare');
+  if (share) { btn.style.display = ''; btn.textContent = 'Compartir'; }
+  else if (!ES_IOS) { btn.style.display = ''; btn.textContent = 'Descargar'; }
+  else { btn.style.display = 'none'; }
+  $('shotHint').textContent = ES_IOS
+    ? 'Mantén presionada la imagen para guardarla en Fotos'
+    : 'Comparte la imagen o descárgala';
+  $('shot').classList.add('show');
+}
+
+function cerrarShot() {
+  $('shot').classList.remove('show');
+  $('shotImg').removeAttribute('src');
+  SHOT = { file: null, url: '' };
+}
+
+async function compartirShot() {
+  if (puedeCompartir()) {
+    try {
+      await navigator.share({ files: [SHOT.file], title: 'Visor de Cambios' });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+  }
+  if (!ES_IOS) {
+    const a = document.createElement('a');
+    a.download = SHOT.file ? SHOT.file.name : nombreArchivo();
+    a.href = SHOT.url;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+  toast('Mantén presionada la imagen para guardarla');
+}
+
+/* ============================================================
+ *  REFRESCO INTELIGENTE
+ * ============================================================ */
+setInterval(() => {
+  if (!document.hidden && esHoySeleccionado()) buscarDatos();
+}, CFG.REFRESCO_MS);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  const hoy = hoyISO();
+  // Si la app quedó abierta desde ayer mostrando "hoy", pasa al nuevo día
+  if (hoy !== HOY_REF && $('fecha').value === HOY_REF) {
+    HOY_REF = hoy;
+    $('fecha').value = hoy;
+    $('fecha').max = hoy;
+    cambiarFecha();
+    return;
+  }
+  if (esHoySeleccionado() && Date.now() - ULTIMA_CARGA > 60000) buscarDatos();
+});
+
+$('monto').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+
+/* ============================================================
+ *  INICIO (sin esperar a fuentes ni librerías externas)
+ * ============================================================ */
+(function init() {
+  document.querySelectorAll('.copy-ico').forEach(el => { el.innerHTML = ICONO; });
+
+  let sep = ',';
+  try { sep = localStorage.getItem(CFG.LS_SEP) || ','; } catch (e) {}
+  setSep(sep);
+
+  const hoy = hoyISO();
+  const f = $('fecha');
+  f.value = hoy;
+  f.max = hoy;
+  actualizarFechaDisplay();
+
+  mostrarDesdeLocal(hoy);
+  buscarDatos();
+
+  // Precarga silenciosa de html2canvas para que "Capturar" sea inmediato
+  setTimeout(() => { cargarHtml2canvas().catch(() => {}); }, 4000);
+})();
+</script>
+</body>
+</html>
